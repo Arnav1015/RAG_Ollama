@@ -10,7 +10,7 @@ conventional algorithms to perform the needed tasks.'''
 
 import re
 import numpy as np
-from vector_store import VectorStore
+from vector_database import VectorStore
 
 
 def tokenize(text):#Creates tokens Using
