@@ -13,7 +13,7 @@ class VectorDatabase:
         database_path = "material/my_faiss_index.index"
 
         if database_file:# Chaeck if folder exists
-            folder = os.path.dirnaAme(database_file)
+            folder = os.path.dirname(database_file)
             os.makedirs(folder, exist_ok=True)
 
         self.index = self._create_index()
@@ -27,10 +27,13 @@ class VectorDatabase:
         
         if self.index_type == 'flat':
             return faiss.IndexFlatIP(self.dimension) if use_cosine else faiss.IndexFlatL2(self.dimension)
+        
         elif self.index_type == 'ivfflat':
+            nlist = min(10, self.dimension)  # or min(10, len(your_vectors))
             quantizer = faiss.IndexFlatIP(self.dimension) if use_cosine else faiss.IndexFlatL2(self.dimension)
-            index = faiss.IndexIVFFlat(quantizer, self.dimension, 100, metric_type)
+            index = faiss.IndexIVFFlat(quantizer, self.dimension, nlist, metric_type)
             return index
+
         else:
             raise ValueError("Unsupported index type")
 
@@ -46,19 +49,43 @@ class VectorDatabase:
             vectors_np = self._normalize(vectors_np)
 
         if self.index_type == 'ivfflat' and not self.index.is_trained:
+            print("Training FAISS index...")
             self.index.train(vectors_np)
+            print("Training complete.")
 
+        print(f"Adding {len(vectors_np)} vectors to FAISS index...")
+        self.index.reset()  # <<< Clear previous vectors from memory index
         self.index.add_with_ids(vectors_np, np.array(vector_ids, dtype=np.int64))
 
         if self.database_file:
             self.save_database()
 
-    def search_similar_vectors(self, query_vector, k=5):
+
+    def search_similar_vectors(self, query_vector, k=5, query_id=None):
         query_vector = np.array([query_vector], dtype=np.float32)
+
         if self.metric == 'cosine':
             query_vector = self._normalize(query_vector)
-        distances, indices = self.index.search(query_vector, k)
-        return distances[0], indices[0]
+
+        distances, indices = self.index.search(query_vector, k + 10)
+
+        seen = set()
+        results = []
+        for dist, idx in zip(distances[0], indices[0]):
+            if idx == -1 or idx == query_id or idx in seen:
+                continue
+            seen.add(idx)
+            results.append((dist, idx))
+            if len(results) == k:
+                break
+
+        if not results:
+            return [], []
+
+        distances, indices = zip(*results)
+        return distances, indices
+
+
 
     def save_database(self):
         print(f"Saving index to: {self.database_file}")

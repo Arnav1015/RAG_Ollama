@@ -23,6 +23,7 @@ def load_text_data(file_path, text_column='text'):
     print("Done step1")
     return df[text_column].dropna().astype(str).tolist()
 
-input_file = 'data.csv'  # Change to 'data.xlsx' to use Excel instead
+input_file = 'housing_data.csv'  # Change to 'data.xlsx' to use Excel instead
 text_column = 'text'
 texts = load_text_data(input_file, text_column)
+

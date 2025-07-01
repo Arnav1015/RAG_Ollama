@@ -6,11 +6,23 @@ training data, in order to make predictions or decisions without \
 being explicitly programmed to do so. Machine learning algorithms \
 are used in a wide variety of applications, such as email filtering \
 and computer vision, where it is difficult or infeasible to develop \
-conventional algorithms to perform the needed tasks.'''
+conventional algorithms to perform the needed tasks. \
+Retrieval-augmented generation is a technique for enhancing the \
+accuracy and reliability of generative AI models with information \
+from specific and relevant data sources.\
+Judges hear and decide cases based on their general understanding of the law. Sometimes a case — \
+like a malpractice suit or a labor dispute requires special expertise, so judges send court clerks \
+to a law library, looking for precedents and specific cases they can cite.\
+The NVIDIA AI Blueprint for RAG gives developers a foundational starting point for building scalable,\
+customizable retrieval pipelines that deliver both high accuracy and throughput. Use this blueprint to\
+build RAG applications that provide context-aware responses by connecting LLMs to extensive\
+multimodal enterprise data—including text, tables, charts, and infographics from millions of PDFs.\
+With 15x faster multimodal PDF data extraction and 50% fewer incorrect answers, enterprises can\
+unlock actionable insights from data and drive productivity at scale.'''
 
 import re
 import numpy as np
-from vector_store import VectorStore
+from vector_database import VectorDatabase  
 
 
 def tokenize(text):#Creates tokens Using
@@ -155,7 +167,7 @@ model = init_network(len(word_to_id), 10)
 history = [backward(model, X_indices, y_indices, learning_rate) for _ in range(n_iter)]
 
 
-# Plot using Seaborn's default theme and Matplotlib's interface
+#Plot using Seaborn's default theme and Matplotlib's interface
 plt.figure(figsize=(8, 5))
 sns.lineplot(x=range(len(history)), y=history, color="skyblue")
 
@@ -165,17 +177,79 @@ plt.title("Training Loss Over Iterations")
 plt.tight_layout()
 plt.show()
 
-vector_store = VectorStore()
+
+
+
+# Create FAISS database
+db = VectorDatabase(
+    dimension=model["w1"].shape[1],   # embedding dimension (10 in this case)
+    index_type='ivfflat',
+    metric='cosine',
+    database_file='material/word2vec_index.index'
+)
+
+# Prepare embeddings and IDs
+vectors = []
+vector_ids = []
+id_to_word_map = {}
+
 for word, idx in word_to_id.items():
     embedding_vector = model["w1"][idx]
-    vector_store.add_vector(word, embedding_vector)
+    vectors.append(embedding_vector)
+    vector_ids.append(idx)
+    id_to_word_map[idx] = word  # Save mapping for reverse lookup
 
+# Add embeddings to FAISS and mappings
+
+db.add_vectors(vectors, vector_ids)
+
+import pickle
+unique_vectors = np.unique(vectors, axis=0)
+print("Total vectors:", len(vectors))
+print("Unique vectors:", len(unique_vectors))
+
+# Save mapping files
+with open("material/word_to_id.pkl", "wb") as f:
+    pickle.dump(word_to_id, f)
+
+with open("material/id_to_word.pkl", "wb") as f:
+    pickle.dump(id_to_word_map, f)
+
+
+with open("material/word_to_id.pkl", "rb") as f:
+    word_to_id = pickle.load(f)
+
+with open("material/id_to_word.pkl", "rb") as f:
+    id_to_word_map = pickle.load(f)
+
+np.save("material/embedding_matrix.npy", model["w1"])#Saving the trained embedding matrix
+
+# Load FAISS index
+db = VectorDatabase(
+    dimension=10,  # same as embedding_dim used during training
+    index_type='ivfflat',
+    metric='cosine',
+    database_file='material/word2vec_index.index'
+)
+
+# Query word
 query_word = "machine"
-query_vector = model["w1"][word_to_id[query_word]]
+query_idx = word_to_id[query_word]
+query_vector = model["w1"][query_idx]
 
-similar_words = vector_store.find_similar_vectors(query_vector, num_results=5)
-print(f"Top similar words to '{query_word}':")
-for word, score in similar_words:
-    print(f"{word}: {score:.4f}")
+# Search with exclusion of query word itself
+distances, indices = db.search_similar_vectors(query_vector, k=5, query_id=query_idx)
+
+if not indices:
+    print("No similar words found.")
+else:
+    print(f"Top similar words to '{query_word}':")
+    for idx, dist in zip(indices, distances):
+        print(f"{id_to_word[idx]}: {dist:.4f}")
+
+print(f"FAISS index total vectors: {db.index.ntotal}")
+print(f"Total words in embedding: {len(word_to_id)}")
+print(f"Vector dimension: {model['w1'].shape[1]}")
+
     
 #help from https://jaketae.github.io/study/word2vec/
