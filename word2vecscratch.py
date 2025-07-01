@@ -22,7 +22,11 @@ unlock actionable insights from data and drive productivity at scale.'''
 
 import re
 import numpy as np
+<<<<<<< HEAD
 from vector_database import VectorDatabase  
+=======
+from vector_database import VectorStore
+>>>>>>> 79f375aa6c32a2b322368932ce1f9c58111d63e0
 
 
 def tokenize(text):#Creates tokens Using

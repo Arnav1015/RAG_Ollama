@@ -1,0 +1,8 @@
+pandas
+ollama
+numpy
+sentence_transformers
+typing
+langchain
+langchain_community
+langchain.text_splitter
