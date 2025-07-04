@@ -1,0 +1,21 @@
+Machine learning is the study of computer algorithms that \
+improve automatically through experience. It is seen as a \
+subset of artificial intelligence. Machine learning algorithms \
+build a mathematical model based on sample data, known as \
+training data, in order to make predictions or decisions without \
+being explicitly programmed to do so. Machine learning algorithms \
+are used in a wide variety of applications, such as email filtering \
+and computer vision, where it is difficult or infeasible to develop \
+conventional algorithms to perform the needed tasks. \
+Retrieval-augmented generation is a technique for enhancing the \
+accuracy and reliability of generative AI models with information \
+from specific and relevant data sources.\
+Judges hear and decide cases based on their general understanding of the law. Sometimes a case — \
+like a malpractice suit or a labor dispute requires special expertise, so judges send court clerks \
+to a law library, looking for precedents and specific cases they can cite.\
+The NVIDIA AI Blueprint for RAG gives developers a foundational starting point for building scalable,\
+customizable retrieval pipelines that deliver both high accuracy and throughput. Use this blueprint to\
+build RAG applications that provide context-aware responses by connecting LLMs to extensive\
+multimodal enterprise data—including text, tables, charts, and infographics from millions of PDFs.\
+With 15x faster multimodal PDF data extraction and 50% fewer incorrect answers, enterprises can\
+unlock actionable insights from data and drive productivity at scale
