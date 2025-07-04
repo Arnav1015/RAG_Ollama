@@ -61,7 +61,7 @@ class VectorDatabase:
             self.save_database()
 
 
-    def search_similar_vectors(self, query_vector, k=5, query_id=None):
+    def search_similar_vectors(self, query_vector, k=10, query_id=None):
         query_vector = np.array([query_vector], dtype=np.float32)
 
         if self.metric == 'cosine':

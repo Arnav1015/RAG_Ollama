@@ -24,5 +24,5 @@ def DocumentLoader():
                                           separators=["\n\n", "\n", " "])
     texts = text_splitter.split_documents(documents)
 
-    print (texts)
+    
     pass
