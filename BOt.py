@@ -1,10 +1,6 @@
 import ollama
 import os
 from typing import List, Dict, Any
-from langchain.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
 import query
 class OllamaRAG:
     def __init__(
@@ -18,7 +14,7 @@ class OllamaRAG:
         ]
         
 
-    def query(self,query_text, k: int = 10) -> List[str]:
+    def query(self,query_text, k: int = 100) -> List[str]:
         docs=query.query_faiss(query_text, k)
         return docs
     

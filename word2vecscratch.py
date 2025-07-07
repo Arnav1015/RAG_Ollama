@@ -21,7 +21,7 @@ def tokenize(text):
     return pattern.findall(text.lower())
 
 #Text Chunking
-def chunk_text(text, by="paragraph", max_words=200, overlap=50):
+def chunk_text(text, by="word_count", max_words=200, overlap=50):
     if by == "paragraph":
         return [chunk.strip() for chunk in text.split("\n\n") if chunk.strip()]
 

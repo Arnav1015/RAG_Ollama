@@ -15,7 +15,7 @@ def embed_query(query):
         return None
     return np.mean(vectors, axis=0).reshape(1, -1)
 
-def query_faiss(query, k :int = 10):
+def query_faiss(query, k :int = 100):
     # Load index and data
     index = faiss.read_index("material/rag_word2vec_index.faiss")
     with open("material/rag_word2vec_texts.pkl", "rb") as f:
