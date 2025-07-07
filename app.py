@@ -5,6 +5,8 @@ from PyQt5.QtCore import QThread, pyqtSignal
 import sys
 import os
 import time
+import traceback
+import ollama  # Added top-level import here
 
 # Import the RAG system from BOt.py
 from Bot import OllamaRAG
@@ -34,13 +36,13 @@ class OllamaThread(QThread):
         self.query_text = query_text
         
     def run(self):
-        import ollama  # Import ollama here to ensure it's defined
-        # Get the RAG response
-        docs = self.rag_system.query(self.query_text)
-        context = self.rag_system.format_retrieved_context(docs)
-        
-        # Create RAG prompt
-        rag_prompt = f"""
+        try:
+            # Get the RAG response
+            docs = self.rag_system.query(self.query_text)
+            context = self.rag_system.format_retrieved_context(docs)
+            
+            # Create RAG prompt
+            rag_prompt = f"""
 Use the following pieces of context to answer the question at the end. 
 If you don't know the answer based on the context, say you don't know.
 
@@ -51,18 +53,26 @@ Question: {self.query_text}
 
 Answer:
 """
-        # Add the RAG prompt to messages and get response
-        self.rag_system.messages.append({"role": "user", "content": rag_prompt})
-        response = ollama.chat(model=self.rag_system.model_name, messages=self.rag_system.messages)
-        answer = response.message.content
-        
-        # Update message history
-        self.rag_system.messages.pop()  # Remove the RAG prompt
-        self.rag_system.messages.append({"role": "user", "content": self.query_text})
-        self.rag_system.messages.append({"role": "assistant", "content": answer})
-        
-        # Emit the response signal
-        self.response_signal.emit(answer)
+            # Add the RAG prompt to messages and get response
+            self.rag_system.messages.append({"role": "user", "content": rag_prompt})
+            
+            # Useing ollama directly
+            response = ollama.chat(model=self.rag_system.model_name, messages=self.rag_system.messages)
+            answer = response.message.content
+            
+            # Update message history
+            self.rag_system.messages.pop()  # Remove the RAG prompt
+            self.rag_system.messages.append({"role": "user", "content": self.query_text})
+            self.rag_system.messages.append({"role": "assistant", "content": answer})
+            
+            # Emit the response signal
+            self.response_signal.emit(answer)
+            
+        except Exception as e:
+            error_message = f"Error in OllamaThread: {str(e)}\n{traceback.format_exc()}"
+            print(error_message)
+            self.response_signal.emit(f"Error: {str(e)}")
+
 
 class ChatWindow(QMainWindow):
     def __init__(self):
@@ -174,8 +184,6 @@ class ChatWindow(QMainWindow):
         self.status_label.setText("Status: Processing query...")
         
         # Process query in a separate thread
-        import ollama  # Import here to avoid circular imports
-        
         try:
             # Start thread for Ollama query
             self.ollama_thread = OllamaThread(self.rag_system, user_query)
@@ -202,8 +210,7 @@ class ChatWindow(QMainWindow):
         
         if file_path:
             try:
-                # Call your file processing method from OllamaRAG
-                # Assuming you have a method to add files
+                # Call file processing method from OllamaRAG
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                 
@@ -228,7 +235,7 @@ class ChatWindow(QMainWindow):
                 # Update status
                 self.status_label.setText(f"Status: Adding PDF {os.path.basename(file_path)}...")
                 
-                # Call your PDF processing method
+                # Call PDF processing method
                 import query
                 query.add_pdf_to_index(file_path)
                 
