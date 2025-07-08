@@ -6,25 +6,102 @@ import sys
 import os
 import time
 import traceback
-import ollama  # Added top-level import here
+import ollama  
 
-# Import the RAG system from BOt.py
 from Bot import OllamaRAG
 
-setStyleQte = """QTextEdit {
-    font-family: "Courier"; 
-    font-size: 12pt; 
-    font-weight: 600; 
-    text-align: right;
-    background-color: Gainsboro;
-}"""
+# Soothing color palette
+soothing_colors = {
+    'background': '#f5f7fa',       # Soft light gray-blue
+    'text_area': "#e3e3e3",        # Pure white 
+    'text_color': '#3a4a5a',       # Soft dark blue-gray
+    'accent': '#7eb6bd',           # Calm teal
+    'accent_hover': '#6ea5ad',     # Slightly deeper teal
+    'secondary': '#d3e5eb',        # Very soft blue
+    'highlight': '#f2d9c2',        # Warm beige
+    'success': "#61dc75",          # Soft green
+    'border': '#c0d6df'            # Muted blue-gray
+}
 
-setStyletui = """QLineEdit, QPushButton {
-    font-family: "Courier";
-    font-weight: 600; 
-    text-align: left;
-    background-color: Gainsboro;
-}"""
+# Text area style
+setStyleQte = f"""
+    QTextEdit {{
+        background-color: {soothing_colors['text_area']};
+        color: {soothing_colors['text_color']};
+        font-family: 'Segoe UI', 'Helvetica';
+        font-size: 12pt;
+        font-weight: 400;
+        border: 2px solid {soothing_colors['border']};
+        border-radius: 8px;
+        padding: 12px;
+    }}
+    
+    QTextEdit#doc_info {{
+        background-color: {soothing_colors['secondary']};
+        color: {soothing_colors['text_color']};
+        font-size: 11pt;
+    }}
+"""
+
+# Button and control styles
+setStyletui = f"""
+    QPushButton {{
+        background-color: {soothing_colors['accent']};
+        color: white;
+        font-family: 'Segoe UI', 'Arial';
+        font-size: 11pt;
+        font-weight: 600;
+        border: 1px solid {soothing_colors['accent']};
+        border-radius: 8px;
+        padding: 8px 16px;
+        margin: 5px 8px 5px 0px;
+    }}
+    
+    QPushButton:hover {{
+        background-color: {soothing_colors['accent_hover']};
+    }}
+    
+    QPushButton:pressed {{
+        background-color: {soothing_colors['accent_hover']};
+        margin: 6px 7px 4px 1px;
+    }}
+    
+    QGroupBox {{
+        background-color: {soothing_colors['background']};
+        font-family: 'Segoe UI', 'Arial';
+        font-size: 12pt;
+        font-weight: bold;
+        border: 2px solid {soothing_colors['border']};
+        border-radius: 8px;
+        margin-top: 25px;
+        padding-top: 15px;
+    }}
+    
+    QGroupBox::title {{
+        subcontrol-origin: margin;
+        subcontrol-position: top left;
+        background-color: {soothing_colors['secondary']};
+        padding: 6px 12px;
+        color: {soothing_colors['text_color']};
+        border: 1px solid {soothing_colors['border']};
+        border-radius: 6px;
+        left: 20px;
+    }}
+    
+    QLabel {{
+        font-family: 'Segoe UI', 'Arial';
+        font-size: 11pt;
+        font-weight: 500;
+        color: {soothing_colors['text_color']};
+    }}
+"""
+
+# Main window style
+main_window_style = f"""
+    QMainWindow, QWidget {{
+        background-color: {soothing_colors['background']};
+    }}
+"""
 
 class OllamaThread(QThread):
     """Thread for running Ollama queries without freezing the UI"""
@@ -43,15 +120,23 @@ class OllamaThread(QThread):
             
             # Create RAG prompt
             rag_prompt = f"""
-Use the following pieces of context to answer the question at the end. 
-If you don't know the answer based on the context, say you don't know.
+You are an AI assistant tasked with answering questions based solely on the provided context. 
+
+Please follow these guidelines:
+- Use only the information provided in the context.
+- When applicable, cite or reference the part of the context that supports your answer.
+- If the user responds with a follow-up like "yes", "tell me more", or asks for clarification, you may continue the conversation naturally based on your previous answer — but indicate that you're stepping out of context-based answering.
+- If the answer is not explicitly stated or clearly inferable, inform the user and then proceed to give your best answer.
+- You may summarize or rephrase content from the context, but do not introduce any new information.
 
 Context:
 {context}
 
-Question: {self.query_text}
+Question:
+{self.query_text}
 
-Answer:
+Answer:r reference the part of the context that supports your answer.
+
 """
             # Add the RAG prompt to messages and get response
             self.rag_system.messages.append({"role": "user", "content": rag_prompt})
@@ -77,8 +162,11 @@ Answer:
 class ChatWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('RAG-Enabled AI Assistant')
+        self.setWindowTitle('AI-RAG Assistant')
         self.setMinimumSize(1000, 600)
+        
+        # Apply main window style first
+        self.setStyleSheet(main_window_style)
         
         # Initialize RAG system
         self.rag_system = OllamaRAG(model_name="llama3.2")
@@ -129,11 +217,11 @@ class ChatWindow(QMainWindow):
         
         # Status label
         self.status_label = QLabel("Status: Ready")
-        self.status_label.setStyleSheet("font-weight: bold; color: green;")
+        self.status_label.setStyleSheet(f"font-weight: bold; color: {soothing_colors['success']};")
         self.chat_section.addWidget(self.status_label)
         
         # Add chat section to main layout
-        self.main_layout.addLayout(self.chat_section, 7)
+        self.main_layout.addLayout(self.chat_section, 9)
         
         # Controls section (right side)
         controls_box = QGroupBox("RAG Controls")
@@ -152,6 +240,7 @@ class ChatWindow(QMainWindow):
         
         # Document info
         self.doc_info = QTextEdit()
+        self.doc_info.setObjectName("doc_info")  # Add this line to apply specific styling
         self.doc_info.setReadOnly(True)
         self.doc_info.setPlaceholderText("Document information will appear here...")
         controls_layout.addWidget(self.doc_info)
@@ -173,8 +262,8 @@ class ChatWindow(QMainWindow):
             self.status_label.setText("Status: Please enter a query.")
             return
         
-        # Update chat history with user query
-        self.text_area.append(f"You: {user_query}")
+        # Update chat history with user query - formatted for readability
+        self.text_area.append(f"\n<span style='color:#8C6057; font-weight:bold;'>You:</span> {user_query}\n")
         self.text_area.moveCursor(self.text_area.textCursor().End)
         
         # Clear input field
@@ -195,8 +284,9 @@ class ChatWindow(QMainWindow):
             self.text_area.moveCursor(self.text_area.textCursor().End)
     
     def handle_response(self, response):
-        # Update chat history with AI response
-        self.text_area.append(f"AI: {response}")
+        # Update chat history with AI response - formatted for readability
+        self.text_area.append(f"\n<span style='color:{soothing_colors['accent']}; font-weight:bold;'>AI:</span>")
+        self.text_area.append(f"{response}\n")
         self.text_area.moveCursor(self.text_area.textCursor().End)
         
         # Update status
@@ -261,6 +351,10 @@ class ChatWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    
+    # Set application-wide style options
+    app.setStyle("Fusion")  # Use Fusion style for a cleaner look
+    
     window = ChatWindow()
     window.show()
     sys.exit(app.exec_())
