@@ -65,9 +65,15 @@ def load_image_chunk(path: str) -> Tuple[List[str], List[Dict]]:
 
 def embed_and_store(chunks: List[str], metadatas: List[Dict], store: ChromaVectorStore):
     ids = [str(uuid4()) for _ in chunks]
-    embeddings = embedding_model.encode(chunks, show_progress_bar=True, convert_to_numpy=False)
+    
+    # Convert all embeddings to lists
+    embeddings = embedding_model.encode(chunks, show_progress_bar=True)
+    if not isinstance(embeddings, list):
+        embeddings = [emb.tolist() for emb in embeddings]
+
     store.add_documents(ids, chunks, embeddings, metadatas)
     print(f"Stored {len(chunks)} chunks.")
+
 
 def process_file(file_path: str, store: ChromaVectorStore, existing_files: set):
     filename = os.path.basename(file_path)
@@ -101,6 +107,6 @@ def process_folder(folder_path: str, store: ChromaVectorStore):
                 process_file(full_path, store, existing_files)
 
 if __name__ == "__main__":
-    folder_path = "C:/Users/Arnav/Documents/a_Database/text"
+    folder_path = "./text"
     store = ChromaVectorStore(collection_name="hybrid_data", persist_directory="chroma_db")
     process_folder(folder_path, store)
