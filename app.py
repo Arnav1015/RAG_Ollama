@@ -1,12 +1,14 @@
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QGridLayout, QWidget,
     QPushButton, QTableWidget, QTableWidgetItem, QInputDialog, QTextEdit, 
-    QFileDialog, QHBoxLayout, QVBoxLayout, QGroupBox)
+    QFileDialog, QHBoxLayout, QVBoxLayout, QGroupBox, QMessageBox)
 from PyQt5.QtCore import QThread, pyqtSignal
 import sys
 import os
 import time
 import traceback
 import ollama  
+import re 
+import json
 
 from Bot import OllamaRAG
 
@@ -128,6 +130,18 @@ Please follow these guidelines:
 - If the user responds with a follow-up like "yes", "tell me more", or asks for clarification, you may continue the conversation naturally based on your previous answer — but indicate that you're stepping out of context-based answering.
 - If the answer is not explicitly stated or clearly inferable, inform the user and then proceed to give your best answer.
 - You may summarize or rephrase content from the context, but do not introduce any new information.
+- DO not Halucinate
+
+IMPORTANT INSTRUCTION FOR STRUCTURED DATA or EXCELL SHEET:
+When the query asks for creating excel sheet, 
+ALWAYS format your response as a list of dictionaries that can be exported to Excel, following these rules:
+
+1. ALWAYS wrap structured data in triple backticks with python syntax highlighting an change the number of coloum and value accordingly:
+```python
+[
+    {{"column1": "value1", "column2": "value2"}},
+    {{"column1": "value3", "column2": "value4"}}
+]
 
 Context:
 {context}
@@ -213,6 +227,13 @@ class ChatWindow(QMainWindow):
         self.clear_button.clicked.connect(self.clear_chat_history)
         chat_buttons.addWidget(self.clear_button)
         
+        #Export to Excel button
+        self.export_button = QPushButton("Export to Excel")
+        self.export_button.setStyleSheet(setStyletui)
+        self.export_button.clicked.connect(self.export_to_excel)
+        self.export_button.setEnabled(False)  # Initially disabled
+        chat_buttons.addWidget(self.export_button)
+        
         self.chat_section.addLayout(chat_buttons)
         
         # Status label
@@ -240,6 +261,7 @@ class ChatWindow(QMainWindow):
         
         # Document info
         self.doc_info = QTextEdit()
+        self.doc_info.setAcceptDrops(True)
         self.doc_info.setObjectName("doc_info")  # Add this line to apply specific styling
         self.doc_info.setReadOnly(True)
         self.doc_info.setPlaceholderText("Document information will appear here...")
@@ -256,13 +278,14 @@ class ChatWindow(QMainWindow):
         # Set the stylesheet for the main window
         self.setStyleSheet("background-color: #f0f0f0; font-family: Arial;")
     
+    
     def handle_query(self):
         user_query = self.input_field.toPlainText().strip()
         if not user_query:
             self.status_label.setText("Status: Please enter a query.")
             return
         
-        # Update chat history with user query - formatted for readability
+        # Update chat history with user query
         self.text_area.append(f"\n<span style='color:#8C6057; font-weight:bold;'>You:</span> {user_query}\n")
         self.text_area.moveCursor(self.text_area.textCursor().End)
         
@@ -283,10 +306,75 @@ class ChatWindow(QMainWindow):
             self.status_label.setText("Status: Error processing query.")
             self.text_area.moveCursor(self.text_area.textCursor().End)
     
+    def extract_structured_data(self, response_text):    
+        # Pattern to match Python code blocks with lists/dictionaries
+        pattern = r'```python\s*\n([\s\S]*?)\n\s*```'
+        
+        match = re.search(pattern, response_text)  # Changed from self.response_text to response_text
+        if match:
+            code_block = match.group(1).strip()
+            try:
+                # Replace single quotes with double quotes for JSON parsing
+                code_block = code_block.replace("'", '"')
+                # Parse the data as JSON
+                data = json.loads(code_block)
+            
+                # Check if it's a list of dictionaries or a dictionary
+                if isinstance(data, list) and all(isinstance(item, dict) for item in data):
+                    return data
+                elif isinstance(data, dict):
+                    return [data]
+            except json.JSONDecodeError:
+                # If JSON parsing fails, try using ast.literal_eval
+                try:
+                    import ast
+                    data = ast.literal_eval(code_block)
+                
+                    # Check if it's a list of dictionaries or a dictionary
+                    if isinstance(data, list) and all(isinstance(item, dict) for item in data):
+                        return data
+                    elif isinstance(data, dict):
+                        return [data]
+                except (SyntaxError, ValueError):
+                    pass
+        return None 
+    
+
     def handle_response(self, response):
-        # Update chat history with AI response - formatted for readability
-        self.text_area.append(f"\n<span style='color:{soothing_colors['accent']}; font-weight:bold;'>AI:</span>")
-        self.text_area.append(f"{response}\n")
+        # Extract structured data if it exists
+        structured_data = self.extract_structured_data(response)
+        
+        if structured_data:
+            # Store the structured data for later use
+            self.structured_data = structured_data
+            
+            # Enable the export button
+            self.export_button.setEnabled(True)
+            
+            # Show notification about structured data
+            data_notification = """<div style='background-color:#f0f7ee; padding:10px; border-left:4px solid #8bbf9f; margin:5px 0;'>
+            <b>📊 Structured data detected!</b> Use the "Export to Excel" button to save this data.
+            </div>"""
+            
+            # Add AI response with formatting
+            self.text_area.append(f"\n<span style='color:{soothing_colors['accent']}; font-weight:bold;'>AI:</span>")
+            self.text_area.append(data_notification)
+            
+            # Clean the response by removing the code block for display
+            import re
+            clean_response = re.sub(r'```python\s*\n[\s\S]*?\n\s*```', 
+                                  '<i>[Structured data ready for export]</i>', 
+                                  response)
+            self.text_area.append(f"{clean_response}\n")
+        else:
+            # No structured data, disable the export button
+            if hasattr(self, 'export_button'):
+                self.export_button.setEnabled(False)
+            
+            # Normal response display
+            self.text_area.append(f"\n<span style='color:{soothing_colors['accent']}; font-weight:bold;'>AI:</span>")
+            self.text_area.append(f"{response}\n")
+        
         self.text_area.moveCursor(self.text_area.textCursor().End)
         
         # Update status
@@ -345,15 +433,52 @@ class ChatWindow(QMainWindow):
             {"role": "system", "content": "You are a helpful assistant. Use the provided context to answer questions accurately. If the answer isn't in the context, say you don't know."},
         ]
         
+        # Clear structured data and disable export button
+        if hasattr(self, 'structured_data'):
+            delattr(self, 'structured_data')
+        self.export_button.setEnabled(False)
+        
         self.status_label.setText("Status: Chat history cleared.")
         self.input_field.clear()
         self.input_field.setFocus()
+
+    def export_to_excel(self):
+        """Export structured data to Excel"""
+        if not hasattr(self, 'structured_data') or not self.structured_data:
+            QMessageBox.warning(self, "No Data", "No structured data available to export.")
+            return
+        
+        # Ask user for file location
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Excel File", "", "Excel Files (*.xlsx)"
+        )
+        
+        if not file_path:
+            return
+        
+        if not file_path.endswith('.xlsx'):
+            file_path += '.xlsx'
+        
+        try:
+            import pandas as pd
+            
+            # Convert to pandas DataFrame
+            df = pd.DataFrame(self.structured_data)
+            
+            # Export to Excel
+            df.to_excel(file_path, index=False)
+            
+            self.status_label.setText(f"Status: Data exported to {file_path}")
+            QMessageBox.information(self, "Export Successful", f"Data has been exported to {file_path}")
+        except Exception as e:
+            self.status_label.setText(f"Status: Error exporting data - {str(e)}")
+            QMessageBox.critical(self, "Export Error", f"Failed to export data: {str(e)}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
     # Set application-wide style options
-    app.setStyle("Fusion")  # Use Fusion style for a cleaner look
+    app.setStyle("Fusion")  # Fusion style for a cleaner look
     
     window = ChatWindow()
     window.show()
