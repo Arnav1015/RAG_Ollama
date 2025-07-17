@@ -114,6 +114,7 @@ def embed_and_store(chunks: List[str], metadatas: List[Dict], store: ChromaVecto
     store.add_documents(ids, chunks, embeddings, metadatas)
     print(f"Stored {len(chunks)} chunks.")
 
+
 def process_file(file_path: str, store: ChromaVectorStore, existing_files: set):
     filename = os.path.basename(file_path)
     if filename in existing_files:
@@ -149,5 +150,6 @@ def process_folder(folder_path: str, store: ChromaVectorStore):
 
 if __name__ == "__main__":
     folder_path = "C:/Users/Arnav/Documents/text"
+    folder_path = "./text"
     store = ChromaVectorStore(collection_name="hybrid_data", persist_directory="chroma_db")
     process_folder(folder_path, store)
