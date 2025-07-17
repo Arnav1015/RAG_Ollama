@@ -9,8 +9,10 @@ import traceback
 import ollama  
 import re 
 import json
+import pandas as pd
 
-from Bot import OllamaRAG
+from Vector_Database_ChromaDB import ChromaVectorStore
+from Embedd import process_file, get_embedding_model
 
 # Soothing color palette
 soothing_colors = {
@@ -105,6 +107,57 @@ main_window_style = f"""
     }}
 """
 
+class ChromaRAG:
+    """RAG system using ChromaDB for vector storage and retrieval"""
+    
+    def __init__(self, model_name: str = "llama3.2", collection_name: str = "hybrid_data"):
+        self.model_name = model_name
+        self.vector_store = ChromaVectorStore(collection_name=collection_name, persist_directory="chroma_db")
+        # Initialize messages for chat
+        self.messages = [
+            {"role": "system", "content": "You are a helpful assistant. Use the provided context to answer questions accurately. If the answer isn't in the context, say you don't know."},
+        ]
+    
+    def query(self, query_text: str, k: int = 5) -> list:
+        """Query the ChromaDB vector store"""
+        try:
+            # Get embedding model and encode query
+            embedding_model = get_embedding_model()
+            query_embedding = embedding_model.encode([query_text])[0].tolist()
+            
+            # Query the vector store
+            results = self.vector_store.query(query_embedding, top_k=k)
+            
+            # Format results similar to the old system
+            docs = []
+            if results and 'documents' in results and results['documents']:
+                for i, (doc, metadata, distance) in enumerate(zip(
+                    results['documents'][0], 
+                    results['metadatas'][0], 
+                    results['distances'][0]
+                )):
+                    # Extract filename and chunk info from metadata
+                    filename = metadata.get('filename', 'unknown')
+                    chunk_id = metadata.get('chunk', i)
+                    docs.append((doc, (filename, chunk_id), distance))
+            
+            return docs
+        except Exception as e:
+            print(f"Error querying ChromaDB: {e}")
+            return []
+    
+    def format_retrieved_context(self, docs: list) -> str:
+        """Format retrieved documents into a context string"""
+        context = "Here is relevant information:\n\n"
+        
+        for i, (chunk_text, (filename, chunk_index), distance) in enumerate(docs):
+            context += f"Document {i+1} (from {filename}, chunk {chunk_index}):\n"
+            context += chunk_text.strip() + "\n"
+            context += f"Similarity Score: {distance:.4f}\n"
+            context += "-" * 40 + "\n"
+        
+        return context
+
 class OllamaThread(QThread):
     """Thread for running Ollama queries without freezing the UI"""
     response_signal = pyqtSignal(str)
@@ -183,7 +236,7 @@ class ChatWindow(QMainWindow):
         self.setStyleSheet(main_window_style)
         
         # Initialize RAG system
-        self.rag_system = OllamaRAG(model_name="llama3.2")
+        self.rag_system = ChromaRAG(model_name="llama3.2")
         self.ollama_thread = None
 
         # Central widget
@@ -254,10 +307,10 @@ class ChatWindow(QMainWindow):
         self.add_file_button.clicked.connect(self.add_document)
         controls_layout.addWidget(self.add_file_button)
         
-        # Add PDF button
-        self.add_pdf_button = QPushButton("Add PDF")
-        self.add_pdf_button.clicked.connect(self.add_pdf)
-        controls_layout.addWidget(self.add_pdf_button)
+        # Add folder button
+        self.add_folder_button = QPushButton("Add Folder")
+        self.add_folder_button.clicked.connect(self.add_folder)
+        controls_layout.addWidget(self.add_folder_button)
         
         # Document info
         self.doc_info = QTextEdit()
@@ -381,20 +434,19 @@ class ChatWindow(QMainWindow):
         self.status_label.setText("Status: Query processed successfully.")
     
     def add_document(self):
-        """Add a text document to the RAG system"""
+        """Add a document to the RAG system"""
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open Text File", "", "Text Files (*.txt *.md *.csv *.json)"
+            self, "Open Document", "", "All Supported (*.txt *.md *.csv *.json *.xlsx *.pdf *.jpg *.jpeg *.png);;Text Files (*.txt *.md);;Data Files (*.csv *.xlsx *.json);;PDF Files (*.pdf);;Images (*.jpg *.jpeg *.png)"
         )
         
         if file_path:
             try:
-                # Call file processing method from OllamaRAG
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
+                # Update status
+                self.status_label.setText(f"Status: Processing {os.path.basename(file_path)}...")
                 
-                # Add the file to the query system
-                import query
-                query.add_document_to_index(content, os.path.basename(file_path))
+                # Use process_file from Embedd.py to handle the document
+                existing_files = self.rag_system.vector_store.get_all_filenames()
+                process_file(file_path, self.rag_system.vector_store, existing_files)
                 
                 # Update document info
                 self.doc_info.append(f"Added document: {os.path.basename(file_path)}")
@@ -402,26 +454,31 @@ class ChatWindow(QMainWindow):
             except Exception as e:
                 self.status_label.setText(f"Status: Error adding document - {str(e)}")
     
-    def add_pdf(self):
-        """Add a PDF document to the RAG system"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open PDF File", "", "PDF Files (*.pdf)"
+    def add_folder(self):
+        """Add all supported documents from a folder to the RAG system"""
+        folder_path = QFileDialog.getExistingDirectory(
+            self, "Select Folder with Documents"
         )
         
-        if file_path:
+        if folder_path:
             try:
                 # Update status
-                self.status_label.setText(f"Status: Adding PDF {os.path.basename(file_path)}...")
+                self.status_label.setText(f"Status: Processing folder {os.path.basename(folder_path)}...")
                 
-                # Call PDF processing method
-                import query
-                query.add_pdf_to_index(file_path)
+                # Use process_folder from Embedd.py to handle all files in the folder
+                from Embedd import process_folder
+                process_folder(folder_path, self.rag_system.vector_store)
                 
                 # Update document info
-                self.doc_info.append(f"Added PDF: {os.path.basename(file_path)}")
-                self.status_label.setText(f"Status: Added {os.path.basename(file_path)}")
+                self.doc_info.append(f"Added folder: {os.path.basename(folder_path)}")
+                self.status_label.setText(f"Status: Added folder {os.path.basename(folder_path)}")
             except Exception as e:
-                self.status_label.setText(f"Status: Error adding PDF - {str(e)}")
+                self.status_label.setText(f"Status: Error adding folder - {str(e)}")
+
+    def add_pdf(self):
+        """Add a PDF document to the RAG system (legacy method - now handled by add_document)"""
+        # Redirect to add_document since it now handles all file types
+        self.add_document()
     
     def clear_chat_history(self):
         """Clear the chat history and reset the RAG system's messages"""

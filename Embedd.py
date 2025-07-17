@@ -5,15 +5,41 @@ import nltk
 from uuid import uuid4
 from typing import List, Dict, Tuple
 from nltk.tokenize import sent_tokenize
-from sentence_transformers import SentenceTransformer
-from paddleocr import PaddleOCR
 from Vector_Database_ChromaDB import ChromaVectorStore
 
-nltk.download("punkt")
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-ocr_model = PaddleOCR(use_angle_cls=True, lang="en")
+# Lazy loading of heavy dependencies
+_embedding_model = None
+_ocr_model = None
+
+def get_embedding_model():
+    global _embedding_model
+    if _embedding_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        except Exception as e:
+            print(f"Warning: Could not load SentenceTransformer: {e}")
+            print("Please install torch properly for your system.")
+            # Return a dummy model that will raise an error if used
+            _embedding_model = None
+            raise ImportError(f"Failed to load SentenceTransformer: {e}")
+    return _embedding_model
+
+def get_ocr_model():
+    global _ocr_model
+    if _ocr_model is None:
+        from paddleocr import PaddleOCR
+        _ocr_model = PaddleOCR(use_angle_cls=True, lang="en")
+    return _ocr_model
+
+# Download NLTK data if needed
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download("punkt")
 
 def extract_text_from_image(file_path: str) -> str:
+    ocr_model = get_ocr_model()
     result = ocr_model.ocr(file_path, cls=True)
     return " ".join([line[1][0] for line in result[0]]) if result[0] else ""
 
@@ -63,8 +89,27 @@ def load_image_chunk(path: str) -> Tuple[List[str], List[Dict]]:
         "chunk": 0
     }] if text.strip() else ([], [])
 
+def load_text_chunks(path: str, max_sentences_per_chunk: int = 5) -> Tuple[List[str], List[Dict]]:
+    with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+        text = f.read()
+    
+    sentences = sent_tokenize(text)
+    chunks, metadatas = [], []
+    
+    for i in range(0, len(sentences), max_sentences_per_chunk):
+        chunk = " ".join(sentences[i:i+max_sentences_per_chunk])
+        if chunk.strip():
+            chunks.append(chunk)
+            metadatas.append({
+                "source": "text",
+                "filename": os.path.basename(path),
+                "chunk": i // max_sentences_per_chunk,
+            })
+    return chunks, metadatas
+
 def embed_and_store(chunks: List[str], metadatas: List[Dict], store: ChromaVectorStore):
     ids = [str(uuid4()) for _ in chunks]
+    embedding_model = get_embedding_model()
     embeddings = embedding_model.encode(chunks, show_progress_bar=True, convert_to_numpy=False)
     store.add_documents(ids, chunks, embeddings, metadatas)
     print(f"Stored {len(chunks)} chunks.")
@@ -82,6 +127,8 @@ def process_file(file_path: str, store: ChromaVectorStore, existing_files: set):
         chunks, metas = load_pdf_chunks(file_path)
     elif ext in [".jpg", ".jpeg", ".png"]:
         chunks, metas = load_image_chunk(file_path)
+    elif ext in [".txt", ".md", ".json"]:
+        chunks, metas = load_text_chunks(file_path)
     else:
         print(f"Unsupported file type: {file_path}")
         return
@@ -95,12 +142,12 @@ def process_folder(folder_path: str, store: ChromaVectorStore):
     existing_files = store.get_all_filenames()
     for root, _, files in os.walk(folder_path):
         for filename in files:
-            if filename.endswith((".csv", ".xlsx", ".pdf", ".jpg", ".jpeg", ".png")):
+            if filename.endswith((".csv", ".xlsx", ".pdf", ".jpg", ".jpeg", ".png", ".txt", ".md", ".json")):
                 full_path = os.path.join(root, filename)
                 print(f"Processing: {full_path}")
                 process_file(full_path, store, existing_files)
 
 if __name__ == "__main__":
-    folder_path = "C:/Users/Arnav/Documents/a_Database/text"
+    folder_path = "C:/Users/Arnav/Documents/text"
     store = ChromaVectorStore(collection_name="hybrid_data", persist_directory="chroma_db")
     process_folder(folder_path, store)
