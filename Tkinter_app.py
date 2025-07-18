@@ -91,6 +91,11 @@ class ChatWindow:
         # Initialize RAG system
         self.rag_system = ChromaRAG(model_name="llama3.2")
         self.structured_data = None
+        self.current_status = "Status: Ready"
+        self.is_minimized = False
+        
+        # Setup window state monitoring
+        self.setup_window_state_monitoring()
         
         # Create the UI
         self.create_widgets()
@@ -98,26 +103,57 @@ class ChatWindow:
         # Configure styles
         self.configure_styles()
     
+    def setup_window_state_monitoring(self):
+        """Setup window state monitoring for minimized status"""
+        def on_window_state_change(event):
+            if event.widget == self.root:
+                if self.root.state() == 'iconic':  # Minimized
+                    self.is_minimized = True
+                    self.root.title(f'AI-RAG Assistant - {self.current_status}')
+                else:  # Normal or maximized
+                    self.is_minimized = False
+                    self.root.title('AI-RAG Assistant')
+        
+        self.root.bind('<Map>', on_window_state_change)
+        self.root.bind('<Unmap>', on_window_state_change)
+    
+    def update_status_with_title(self, status_text):
+        """Update status and window title if minimized"""
+        self.current_status = status_text
+        self.status_label.configure(text=status_text)
+        
+        if self.is_minimized:
+            self.root.title(f'AI-RAG Assistant - {status_text}')
+    
     def configure_styles(self):
         """Configure ttk styles for consistent theming"""
         style = ttk.Style()
         
-        # Configure button style
+        # Configure button style with better visibility
         style.configure("Custom.TButton",
                        background=soothing_colors['accent'],
-                       foreground='white',
+                       foreground=soothing_colors['text_color'],  # Dark text for visibility
                        font=('Segoe UI', 10, 'bold'),
                        relief='flat',
-                       borderwidth=0)
+                       borderwidth=0,
+                       padding=(10, 5))
         
+        # Configure button hover and focus states
         style.map("Custom.TButton",
-                 background=[('active', soothing_colors['accent_hover'])])
+                 background=[('active', soothing_colors['accent_hover']),
+                            ('pressed', soothing_colors['accent_hover']),
+                            ('focus', soothing_colors['accent'])],
+                 foreground=[('active', 'white'),
+                            ('pressed', 'white'),
+                            ('focus', soothing_colors['text_color'])],
+                 relief=[('pressed', 'flat'),
+                        ('focus', 'solid')])
         
         # Configure frame style
         style.configure("Custom.TFrame",
                        background=soothing_colors['background'],
-                       relief='solid',
-                       borderwidth=1)
+                       relief='flat',
+                       borderwidth=0)
         
         # Configure label style
         style.configure("Custom.TLabel",
@@ -129,10 +165,12 @@ class ChatWindow:
         style.configure("Custom.TLabelframe",
                        background=soothing_colors['background'],
                        foreground=soothing_colors['text_color'],
-                       font=('Segoe UI', 11, 'bold'))
+                       font=('Segoe UI', 11, 'bold'),
+                       relief='solid',
+                       borderwidth=1)
         
         style.configure("Custom.TLabelframe.Label",
-                       background=soothing_colors['secondary'],
+                       background=soothing_colors['background'],
                        foreground=soothing_colors['text_color'],
                        font=('Segoe UI', 11, 'bold'))
     
@@ -281,7 +319,7 @@ class ChatWindow:
         """Handle user query submission"""
         user_query = self.input_field.get("1.0", tk.END).strip()
         if not user_query:
-            self.status_label.configure(text="Status: Please enter a query.")
+            self.update_status_with_title("Status: Please enter a query.")
             return
         
         # Update chat history with user query
@@ -292,7 +330,7 @@ class ChatWindow:
         self.input_field.delete("1.0", tk.END)
         
         # Update status
-        self.status_label.configure(text="Status: Processing query...")
+        self.update_status_with_title("Status: Processing query...")
         
         # Disable submit button during processing
         self.submit_button.configure(state=tk.DISABLED)
@@ -425,7 +463,7 @@ Answer:
         self.text_area.see(tk.END)
         
         # Update status and re-enable submit button
-        self.status_label.configure(text="Status: Query processed successfully.")
+        self.update_status_with_title("Status: Query processed successfully.")
         self.submit_button.configure(state=tk.NORMAL)
     
     def add_document(self):
@@ -446,7 +484,7 @@ Answer:
             def process_document():
                 try:
                     # Update status
-                    self.root.after(0, lambda: self.status_label.configure(text=f"Status: Processing {os.path.basename(file_path)}..."))
+                    self.root.after(0, lambda: self.update_status_with_title(f"Status: Processing {os.path.basename(file_path)}..."))
                     
                     # Check file size first
                     file_size = os.path.getsize(file_path)
@@ -470,20 +508,20 @@ Answer:
                         self.doc_info.configure(state=tk.DISABLED)
                         self.doc_info.see(tk.END)
                         
-                        self.root.after(0, lambda: self.status_label.configure(text=f"Status: Added {os.path.basename(file_path)}"))
+                        self.root.after(0, lambda: self.update_status_with_title(f"Status: Added {os.path.basename(file_path)}"))
                         
                         # Force garbage collection after processing
                         gc.collect()
                         
                     except Exception as process_error:
                         error_msg = f"Status: Error processing document - {str(process_error)}"
-                        self.root.after(0, lambda: self.status_label.configure(text=error_msg))
+                        self.root.after(0, lambda: self.update_status_with_title(error_msg))
                         print(f"Process file error: {process_error}")
                         traceback.print_exc()
                         
                 except Exception as e:
                     error_msg = f"Status: Error adding document - {str(e)}"
-                    self.root.after(0, lambda: self.status_label.configure(text=error_msg))
+                    self.root.after(0, lambda: self.update_status_with_title(error_msg))
                     print(f"Add document error: {e}")
                     traceback.print_exc()
             
@@ -500,7 +538,7 @@ Answer:
             def process_folder_documents():
                 try:
                     # Update status
-                    self.root.after(0, lambda: self.status_label.configure(text=f"Status: Processing folder {os.path.basename(folder_path)}..."))
+                    self.root.after(0, lambda: self.update_status_with_title(f"Status: Processing folder {os.path.basename(folder_path)}..."))
                     
                     # Use process_folder from Embedd.py to handle all files in the folder
                     process_folder(folder_path, self.rag_system.vector_store)
@@ -511,11 +549,11 @@ Answer:
                     self.doc_info.configure(state=tk.DISABLED)
                     self.doc_info.see(tk.END)
                     
-                    self.root.after(0, lambda: self.status_label.configure(text=f"Status: Added folder {os.path.basename(folder_path)}"))
+                    self.root.after(0, lambda: self.update_status_with_title(f"Status: Added folder {os.path.basename(folder_path)}"))
                     
                 except Exception as e:
                     error_msg = f"Status: Error adding folder - {str(e)}"
-                    self.root.after(0, lambda: self.status_label.configure(text=error_msg))
+                    self.root.after(0, lambda: self.update_status_with_title(error_msg))
                     print(f"Add folder error: {e}")
                     traceback.print_exc()
             
@@ -538,7 +576,7 @@ Answer:
         self.structured_data = None
         self.export_button.configure(state=tk.DISABLED)
         
-        self.status_label.configure(text="Status: Chat history cleared.")
+        self.update_status_with_title("Status: Chat history cleared.")
         self.input_field.delete("1.0", tk.END)
         self.input_field.focus()
     
@@ -565,11 +603,11 @@ Answer:
             # Export to Excel
             df.to_excel(file_path, index=False)
             
-            self.status_label.configure(text=f"Status: Data exported to {file_path}")
+            self.update_status_with_title(f"Status: Data exported to {file_path}")
             messagebox.showinfo("Export Successful", f"Data has been exported to {file_path}")
         except Exception as e:
             error_msg = f"Status: Error exporting data - {str(e)}"
-            self.status_label.configure(text=error_msg)
+            self.update_status_with_title(error_msg)
             messagebox.showerror("Export Error", f"Failed to export data: {str(e)}")
     
     def run(self):
