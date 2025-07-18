@@ -129,10 +129,10 @@ class ChatWindow:
         """Configure ttk styles for consistent theming"""
         style = ttk.Style()
         
-        # Configure button style with better visibility
+        # Configure button style
         style.configure("Custom.TButton",
                        background=soothing_colors['accent'],
-                       foreground=soothing_colors['text_color'],  # Dark text for visibility
+                       foreground=soothing_colors['text_color'], 
                        font=('Segoe UI', 10, 'bold'),
                        relief='flat',
                        borderwidth=0,
