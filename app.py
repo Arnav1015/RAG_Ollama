@@ -10,9 +10,13 @@ import ollama
 import re 
 import json
 import pandas as pd
+import chromadb
 
 from Vector_Database_ChromaDB import ChromaVectorStore
 from Embedd import process_file, get_embedding_model
+
+# Print ChromaDB version
+print(f"ChromaDB version: {chromadb.__version__}")
 
 # Soothing color palette
 soothing_colors = {
@@ -444,15 +448,53 @@ class ChatWindow(QMainWindow):
                 # Update status
                 self.status_label.setText(f"Status: Processing {os.path.basename(file_path)}...")
                 
+                # Check file size first
+                file_size = os.path.getsize(file_path)
+                if file_size > 50 * 1024 * 1024:  # 50MB limit
+                    QMessageBox.warning(self, "File Too Large", "File is too large. Please use a smaller file.")
+                    return
+                
+                # Force garbage collection before processing
+                import gc
+                gc.collect()
+                
                 # Use process_file from Embedd.py to handle the document
                 existing_files = self.rag_system.vector_store.get_all_filenames()
-                process_file(file_path, self.rag_system.vector_store, existing_files)
                 
-                # Update document info
-                self.doc_info.append(f"Added document: {os.path.basename(file_path)}")
-                self.status_label.setText(f"Status: Added {os.path.basename(file_path)}")
+                # Process file with error handling and timeout
+                import signal
+                
+                def timeout_handler(signum, frame):
+                    raise TimeoutError("Processing timed out")
+                
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(300)  # 5 minute timeout
+                
+                try:
+                    process_file(file_path, self.rag_system.vector_store, existing_files)
+                    signal.alarm(0)  # Cancel timeout
+                    
+                    # Update document info
+                    self.doc_info.append(f"Added document: {os.path.basename(file_path)}")
+                    self.status_label.setText(f"Status: Added {os.path.basename(file_path)}")
+                    
+                    # Force garbage collection after processing
+                    gc.collect()
+                    
+                except TimeoutError:
+                    self.status_label.setText("Status: Processing timed out - file too large or complex")
+                    QMessageBox.warning(self, "Timeout", "Document processing timed out. Try a smaller file.")
+                except Exception as process_error:
+                    self.status_label.setText(f"Status: Error processing document - {str(process_error)}")
+                    print(f"Process file error: {process_error}")
+                    traceback.print_exc()
+                finally:
+                    signal.alarm(0)  # Ensure timeout is cancelled
+                    
             except Exception as e:
                 self.status_label.setText(f"Status: Error adding document - {str(e)}")
+                print(f"Add document error: {e}")
+                traceback.print_exc()
     
     def add_folder(self):
         """Add all supported documents from a folder to the RAG system"""
