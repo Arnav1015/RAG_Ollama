@@ -46,8 +46,16 @@ class ChromaRAG:
         try:
             # Get embedding model and encode query
             embedding_model = get_embedding_model()
-            query_embedding = embedding_model.encode([query_text])[0].tolist()
             
+            # Ensure encoding happens on CPU
+            import torch
+            with torch.no_grad():
+                query_embedding = embedding_model.encode(
+                    [query_text], 
+                    convert_to_numpy=True,
+                    device="cpu"
+                )[0].tolist()
+        
             # Query the vector store
             results = self.vector_store.query(query_embedding, top_k=k)
             
@@ -63,10 +71,12 @@ class ChromaRAG:
                     filename = metadata.get('filename', 'unknown')
                     chunk_id = metadata.get('chunk', i)
                     docs.append((doc, (filename, chunk_id), distance))
-            
+        
             return docs
         except Exception as e:
             print(f"Error querying ChromaDB: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def format_retrieved_context(self, docs: list) -> str:
@@ -343,8 +353,7 @@ class ChatWindow:
                 context = self.rag_system.format_retrieved_context(docs)
                 
                 # Create RAG prompt
-                rag_prompt = f"""
-You are an AI assistant tasked with answering questions based solely on the provided context. 
+                rag_prompt = f"""You are an AI assistant tasked with answering questions based solely on the provided context. 
 
 Please follow these guidelines:
 - Use only the information provided in the context.
@@ -354,16 +363,57 @@ Please follow these guidelines:
 - You may summarize or rephrase content from the context, but do not introduce any new information.
 - DO not Halucinate
 
-IMPORTANT INSTRUCTION FOR STRUCTURED DATA or EXCELL SHEET:
-When the query asks for creating excel sheet, 
-ALWAYS format your response as a list of dictionaries that can be exported to Excel, following these rules:
+IMPORTANT INSTRUCTION FOR STRUCTURED DATA or EXCEL SHEET:
+When the query asks for creating excel sheet, ALWAYS format your response as a list of dictionaries that can be exported to Excel.
 
-1. ALWAYS wrap structured data in triple backticks with python syntax highlighting an change the number of coloum and value accordingly:
+EXCEL FORMATTING RULES:
+1. ALWAYS wrap structured data in triple backticks with python syntax highlighting:
 ```python
 [
     {{"column1": "value1", "column2": "value2"}},
     {{"column1": "value3", "column2": "value4"}}
 ]
+```
+
+2. For SERVICE TICKET and DETAILS OF DELIVERABLE tables, create THREE separate sections:
+
+SECTION A - PROJECT INFORMATION (4 rows x 4 columns):
+- Column headers: Category, Details, Secondary_Info, Date_Info
+- Row 1: Category=Well, Details=Well Name, Secondary_Info=Rig-up, Date_Info=Rig-up Date
+- Row 2: Category=Rig, Details=Rig Name/Number, Secondary_Info=Rig-down, Date_Info=Rig-down Date  
+- Row 3: Category=Field, Details=Field Name, Secondary_Info=SO Number, Date_Info=SO Number
+- Row 4: Category=Asset, Details=Asset Name, Secondary_Info=Log Suite, Date_Info=Log Suite Details
+
+SECTION B - SERVICE DETAILS (Variable rows x 7 columns):
+- Column headers: Service, Well_Site_Submission, LQC, Post_Processed_Product, Date_of_Submission, Number_of_Prints, LQC_Status
+- Extract each service entry from context as a separate row
+- LQC_Status should be either "Acceptable" or "Not Acceptable"
+
+SECTION C - REMARKS (2 rows spanning all columns):
+- Row 1: Remarks_Type=HLSA, Comments=Extract HLSA related remarks from context
+- Row 2: Remarks_Type=ONGC, Comments=Extract ONGC related remarks from context
+
+FORMATTING GUIDELINES:
+- Use clear, descriptive column names with underscores instead of spaces
+- Extract exact values from context - do not fabricate data
+- If a value is not found in context, use "N/A" or "Not Available"
+- Ensure all dates are in consistent format (DD-MMM-YYYY or DD/MM/YYYY)
+- For missing information, clearly indicate "Information not available in context"
+- Group related information logically
+- Use proper data types (strings for text, numbers for quantities)
+
+EXAMPLE STRUCTURE:
+```python
+[
+    {{"Section": "Project_Info", "Category": "Well", "Details": "Well-A1", "Secondary_Info": "Rig-up", "Date_Info": "15-Jan-2024"}},
+    {{"Section": "Project_Info", "Category": "Rig", "Details": "Rig-101", "Secondary_Info": "Rig-down", "Date_Info": "20-Jan-2024"}},
+    {{"Section": "Project_Info", "Category": "Field", "Details": "North Field", "Secondary_Info": "SO Number", "Date_Info": "SO-2024-001"}},
+    {{"Section": "Project_Info", "Category": "Asset", "Details": "Asset-XYZ", "Secondary_Info": "Log Suite", "Date_Info": "Gamma Ray, Resistivity"}},
+    {{"Section": "Service_Details", "Service": "Logging", "Well_Site_Submission": "Data Package", "LQC": "Completed", "Post_Processed_Product": "Final Log", "Date_of_Submission": "22-Jan-2024", "Number_of_Prints": "5", "LQC_Status": "Acceptable"}},
+    {{"Section": "Remarks", "Remarks_Type": "HLSA", "Comments": "All safety protocols followed as per HLSA guidelines"}},
+    {{"Section": "Remarks", "Remarks_Type": "ONGC", "Comments": "Service completed as per ONGC specifications"}}
+]
+```
 
 Context:
 {context}
@@ -393,11 +443,11 @@ Answer:
                 print(f"Error in process_query: {error_message}")
                 traceback.print_exc()
                 self.root.after(0, self.handle_response, error_message)
-        
-        # Start processing in a separate thread
-        thread = threading.Thread(target=process_query)
-        thread.daemon = True
-        thread.start()
+    
+    # Start processing in a separate thread
+    thread = threading.Thread(target=process_query)
+    thread.daemon = True
+    thread.start()
     
     def extract_structured_data(self, response_text):
         """Extract structured data from response text"""
