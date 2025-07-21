@@ -404,15 +404,7 @@ FORMATTING GUIDELINES:
 
 EXAMPLE STRUCTURE:
 ```python
-[
-    {{"Section": "Project_Info", "Category": "Well", "Details": "Well-A1", "Secondary_Info": "Rig-up", "Date_Info": "15-Jan-2024"}},
-    {{"Section": "Project_Info", "Category": "Rig", "Details": "Rig-101", "Secondary_Info": "Rig-down", "Date_Info": "20-Jan-2024"}},
-    {{"Section": "Project_Info", "Category": "Field", "Details": "North Field", "Secondary_Info": "SO Number", "Date_Info": "SO-2024-001"}},
-    {{"Section": "Project_Info", "Category": "Asset", "Details": "Asset-XYZ", "Secondary_Info": "Log Suite", "Date_Info": "Gamma Ray, Resistivity"}},
-    {{"Section": "Service_Details", "Service": "Logging", "Well_Site_Submission": "Data Package", "LQC": "Completed", "Post_Processed_Product": "Final Log", "Date_of_Submission": "22-Jan-2024", "Number_of_Prints": "5", "LQC_Status": "Acceptable"}},
-    {{"Section": "Remarks", "Remarks_Type": "HLSA", "Comments": "All safety protocols followed as per HLSA guidelines"}},
-    {{"Section": "Remarks", "Remarks_Type": "ONGC", "Comments": "Service completed as per ONGC specifications"}}
-]
+
 ```
 
 Context:
