@@ -443,12 +443,36 @@ Answer:
                 print(f"Error in process_query: {error_message}")
                 traceback.print_exc()
                 self.root.after(0, self.handle_response, error_message)
-    
-    # Start processing in a separate thread
-    thread = threading.Thread(target=process_query)
-    thread.daemon = True
-    thread.start()
-    
+
+        # Start processing in a separate thread
+        thread = threading.Thread(target=process_query)
+        thread.daemon = True
+        thread.start()
+
+    def handle_response(self, answer):
+        """Handle the response from the RAG system"""
+        try:
+            # Display the answer in the chat
+            self.text_area.insert(tk.END, f"Assistant: {answer}\n\n")
+            self.text_area.see(tk.END)
+            
+            # Try to extract structured data for Excel export
+            self.structured_data = self.extract_structured_data(answer)
+            if self.structured_data:
+                self.export_button.configure(state=tk.NORMAL)
+                self.update_status_with_title("Status: Response ready. Structured data available for export.")
+            else:
+                self.export_button.configure(state=tk.DISABLED)
+                self.update_status_with_title("Status: Response complete.")
+                
+        except Exception as e:
+            print(f"Error in handle_response: {e}")
+            traceback.print_exc()
+            self.update_status_with_title("Status: Error displaying response.")
+        finally:
+            # Re-enable submit button
+            self.submit_button.configure(state=tk.NORMAL)
+
     def extract_structured_data(self, response_text):
         """Extract structured data from response text"""
         # Pattern to match Python code blocks with lists/dictionaries
@@ -482,40 +506,7 @@ Answer:
                 except (SyntaxError, ValueError):
                     pass
         return None
-    
-    def handle_response(self, response):
-        """Handle AI response and update UI"""
-        # Extract structured data if it exists
-        structured_data = self.extract_structured_data(response)
-        
-        if structured_data:
-            # Store the structured data for later use
-            self.structured_data = structured_data
-            
-            # Enable the export button
-            self.export_button.configure(state=tk.NORMAL)
-            
-            # Show notification about structured data
-            self.text_area.insert(tk.END, "AI: 📊 Structured data detected! Use the 'Export to Excel' button to save this data.\n\n")
-            
-            # Clean the response by removing the code block for display
-            clean_response = re.sub(r'```python\s*\n[\s\S]*?\n\s*```', 
-                                  '[Structured data ready for export]', 
-                                  response)
-            self.text_area.insert(tk.END, f"{clean_response}\n\n")
-        else:
-            # No structured data, disable the export button
-            self.export_button.configure(state=tk.DISABLED)
-            
-            # Normal response display
-            self.text_area.insert(tk.END, f"AI: {response}\n\n")
-        
-        self.text_area.see(tk.END)
-        
-        # Update status and re-enable submit button
-        self.update_status_with_title("Status: Query processed successfully.")
-        self.submit_button.configure(state=tk.NORMAL)
-    
+
     def add_document(self):
         """Add a document to the RAG system"""
         file_path = filedialog.askopenfilename(
