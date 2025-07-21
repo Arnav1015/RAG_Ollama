@@ -404,9 +404,27 @@ FORMATTING GUIDELINES:
 
 EXAMPLE STRUCTURE:
 ```python
-
+[
+    {{"section": "Details of Deliverable", "category": "Well", "details": "actual_well_name_from_context", "secondary_info": "Rig-up", "date_info": "actual_rigup_date"}},
+    {{"section": "Details of Deliverable", "category": "Rig", "details": "actual_rig_name_from_context", "secondary_info": "Rig-down", "date_info": "actual_rigdown_date"}},
+    {{"section": "Details of Deliverable", "category": "Field", "details": "actual_field_name_from_context", "secondary_info": "SO Number", "date_info": "actual_so_number"}},
+    {{"section": "Details of Deliverable", "category": "Asset", "details": "actual_asset_name_from_context", "secondary_info": "Log Suite", "date_info": "actual_log_suite"}},
+    {{"section": "Service_Details", "service": "actual_service_name", "well_site_product": "actual_product_name","Date of submission":"actual_submission_date", "lqc": "actual_lqc_info", "post_processed_product": "actual_product_name", "date_of_submission": "actual_date_DD-MMM-YYYY", "number_of_prints": "actual_number", "lqc_status": "Acceptable_or_Not_Acceptable"}},
+    {{"section": "Remarks", "remarks_type": "HLSA", "comments": "actual_hlsa_remarks_from_context"}},
+    {{"section": "Remarks", "remarks_type": "ONGC", "comments": "actual_ongc_remarks_from_context"}}
+]
 ```
 
+EXTRACTION RULES:
+- Replace ALL placeholder text with ACTUAL data from the context
+- Extract EXACT values from the context - do not fabricate
+- Use "N/A" only if information is truly missing from context
+- Convert dates to DD-MMM-YYYY format (e.g., "15-Jan-2024")
+- For LQC Status, use only "Acceptable" or "Not Acceptable"
+- Look for tables with headers like: Service, Wellsite Submission, LQC, Post-processed Product, Date of Submission, Number of prints, LQC Status
+- Extract project information from document header (Well, Rig, Field, Asset names)
+- Extract remarks related to HLSA, ONGC, or General comments
+- If multiple services exist, create multiple service detail entries
 Context:
 {context}
 
